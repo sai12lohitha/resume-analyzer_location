@@ -1,0 +1,582 @@
+{
+  "name": "Resume Analyzer and Job Matcher",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Resume Analyzer",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Name",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Email",
+              "fieldType": "email",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Upload Resume",
+              "fieldType": "file",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "locations",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        0
+      ],
+      "id": "d2643f41-4bc1-4ec4-bd77-f0a2e50a2939",
+      "name": "On form submission",
+      "webhookId": "aebdad52-0432-43cc-9277-a2064f8cab4f"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "Upload_Resume",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        0
+      ],
+      "id": "8e346b4c-768f-4c3e-bf5c-a1b0f94ae06f",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b8ac7be8-4177-47b7-9dbe-1fb0bf92d7bf",
+              "name": "Candidate_Name",
+              "value": "={{ $('On form submission').item.json.Name }}",
+              "type": "string"
+            },
+            {
+              "id": "7ac31e0d-a4b9-4b46-9c9f-919aa83a86de",
+              "name": "Candidate_Email",
+              "value": "={{ $('On form submission').item.json.Email }}",
+              "type": "string"
+            },
+            {
+              "id": "d79b572f-509a-4c14-ae82-563183870d69",
+              "name": "resume_text",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            },
+            {
+              "id": "4b4c3850-07d4-4b44-9396-8a2ac123d150",
+              "name": "locations",
+              "value": "={{ $('On form submission').item.json.locations }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        448,
+        0
+      ],
+      "id": "5d4d9ef2-5fc7-4ffc-a27f-2e9db33aa26e",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Candidate Name: {{ $json.Candidate_Name }} \nCandidate Email: {{ $json.Candidate_Email }}\nResume Text: {{ $json.resume_text }} Analyze this resume and determine the most suitable job roles for this candidate. Create a LinkedIn search query using 3 to 5 highly relevant job titles based strictly on the candidate's resume. Also identify the candidate's experience level, location if explicitly mentioned, and strongest skills. Return only valid JSON. ",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are an expert Resume Analyst and Job Search Strategist. Analyze the candidate resume strictly from the information provided. Identify the candidate's: - Experience level - Location if explicitly mentioned - Strongest technical skills - Strongest professional skills - Main career direction - Best-fit job roles Then create ONE LinkedIn job search query containing 3 to 5 relevant job titles separated by OR. Example: Python Developer OR Backend Developer OR Junior Software Engineer OR Full Stack Developer Rules: - Never invent skills. - Never invent experience. - Never invent education. - Never invent certifications. - Never invent a location. - Do not recommend senior roles if the candidate is entry-level. - Only recommend roles supported by the resume. - If location is not available, use an empty string. - Return ONLY valid JSON. "
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        896,
+        0
+      ],
+      "id": "5e356d87-2138-4429-9b4f-ace89f7cf9a9",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{ \n  \"candidate_name\": \"John Doe\",\n  \"candidate_email\": \"john@example.com\",\n  \"experience_level\": \"Entry-level\",\n  \"location\": \"Hyderabad\",\n  \"strongest_skills\": [\"Python\", \"React\", \"SQL\"],\n  \"best_fit_roles\": [\"Python Developer\", \"Full Stack Developer\", \"Junior Software Engineer\"],\n  \"linkedin_search_query\": \"Python Developer OR Full Stack Developer OR Junior Software Engineer\" } "
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        848,
+        208
+      ],
+      "id": "53f8113a-bc72-4672-a5a0-5f4e4b637846",
+      "name": "Resume Analysis Parser"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.5-flash",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        640,
+        208
+      ],
+      "id": "b3630d25-7234-40c9-8a34-bd39c4bb6440",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "=GET",
+        "url": "={{ 'https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search/?keywords=' + encodeURIComponent($json.linkedin_search_query || '') + '&location=' + encodeURIComponent($json.location || '') + '&start=0' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": " text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "en-US,en;q=0.9"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1232,
+        0
+      ],
+      "id": "ac79c02e-9480-4023-9108-efdfa30554ac",
+      "name": "LinkedIn Jobs Search"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json;  let html = '';  if (typeof input.data === 'string') {   html = input.data; } else if (typeof input.body === 'string') {   html = input.body; } else if (typeof input.response === 'string') {   html = input.response; } else {   html = ''; }  function decode(value) {   return String(value || '')     .replace(/&amp;/gi, '&')     .replace(/&quot;/gi, '\"')     .replace(/&#39;/gi, \"'\")     .replace(/&apos;/gi, \"'\")     .replace(/&lt;/gi, '<')     .replace(/&gt;/gi, '>')     .replace(/&#x27;/gi, \"'\")     .replace(/\\s+/g, ' ')     .trim(); }  function stripTags(value) {   return decode(String(value || '').replace(/<[^>]*>/g, ' ')); }  const jobs = [];  if (html) {   const cardRegex = /<li[^>]*>([\\s\\S]*?)<\\/li>/gi;   let match;    while ((match = cardRegex.exec(html)) !== null) {     const card = match[1];      const titleMatch = card.match(/class=[\"'][^\"']*base-search-card__title[^\"']*[\"'][^>]*>([\\s\\S]*?)<\\/h3>/i);     const companyMatch = card.match(/class=[\"'][^\"']*base-search-card__subtitle[^\"']*[\"'][^>]*>([\\s\\S]*?)<\\/h4>/i);     const locationMatch = card.match(/class=[\"'][^\"']*job-search-card__location[^\"']*[\"'][^>]*>([\\s\\S]*?)<\\/span>/i);     const urlMatch = card.match(/href=[\"']([^\"']*\\/jobs\\/view\\/[^\"']+)[\"']/i);      if (!titleMatch) continue;      const title = stripTags(titleMatch[1]);     const company = companyMatch ? stripTags(companyMatch[1]) : 'Not available';     const location = locationMatch ? stripTags(locationMatch[1]) : 'Not available';     const url = urlMatch ? decode(urlMatch[1]) : 'Not available';      if (!title) continue;      const exists = jobs.some(job =>       job.job_title.toLowerCase() === title.toLowerCase() &&       job.company.toLowerCase() === company.toLowerCase()     );      if (!exists) {       jobs.push({         job_title: title,         company: company,         location: location,         job_url: url       });     }      if (jobs.length >= 20) break;   } }  return [   {     json: {       linkedin_jobs: jobs,       linkedin_jobs_found: jobs.length,       linkedin_search_status: jobs.length > 0 ? 'Jobs found' : 'No jobs found or LinkedIn did not return public job data'     }   } ];  "
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2112,
+        -16
+      ],
+      "id": "7c2558b6-2622-4494-9fa7-210225832f9f",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "= CANDIDATE NAME: {{ $('Edit Fields').item.json.Candidate_Name }}  CANDIDATE EMAIL: {{ $('Edit Fields').item.json.Candidate_Email }}  RESUME TEXT: {{ $('Edit Fields').item.json.resume_text }} LINKEDIN SEARCH STATUS:{{ $json.linkedin_search_status }} NUMBER OF LINKEDIN JOBS FOUND: {{ $json.linkedin_jobs_found }} LINKEDIN JOBS:{{ $json.linkedin_jobs }}  Analyze the resume and compare it with the LinkedIn jobs. Return the complete personalized resume analysis and job recommendation report as valid JSON only. ",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are the final AI Resume Analyzer and Personalized Job Recommendation Agent. Your task is to analyze a candidate's resume and compare it against the LinkedIn job listings supplied to you. RESUME ANALYSIS: Identify: - Candidate profile - Education - Work experience - Experience level - Technical skills - Programming languages - Frameworks - Databases - Cloud/DevOps skills - AI/ML skills - Web development skills - Projects - Certifications - Strongest skills - Weaknesses - Missing skills BEST-FIT ROLES: Recommend the most realistic roles for the candidate. For each role provide: - Role - Match percentage - Why the candidate fits - Matching skills - Missing skills LINKEDIN JOB MATCHING: Compare every supplied LinkedIn job against the candidate's resume. Consider: - Job title - Skills visible in the job listing - Candidate skills - Experience level - Experience requirements if available - Location if available - Overall relevance Use these match levels: HIGH MEDIUM LOW Recommend HIGH and MEDIUM match jobs. For every recommended job provide: - Exact job title from input - Exact company from input - Exact location from input - Work mode if available - Match percentage - Match level - Matching skills - Missing skills - Why it matches - Exact job URL from input CRITICAL RULES: 1. Use ONLY information present in the resume and supplied LinkedIn job data. 2. Never invent a job. 3. Never invent a company. 4. Never invent a URL. 5. Never invent skills. 6. Never invent experience. 7. Never invent education. 8. Never guarantee employment. 9. Do not claim a job is suitable just because the title looks similar. 10. Compare the candidate's actual skills with the available job information. 11. If job descriptions are not available, be honest that the match is based on the available job title/company/location information only. 12. If no suitable jobs are available, return an empty job recommendation array. 13. Do not fabricate missing information. 14. Use 'Not available' when information is missing. 15. Keep recommendations realistic and useful.  If LinkedIn returned no jobs, clearly state in the final recommendation that no suitable public LinkedIn job listings were available from the current search.  Return ONLY valid JSON matching the connected Structured Output Parser. "
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        2320,
+        -16
+      ],
+      "id": "7443c953-c43d-447d-9108-fa218c59de5a",
+      "name": "Final Resume & Job Matcher"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        2320,
+        320
+      ],
+      "id": "06dca4fb-17af-40f3-9cc9-9a127c5b3d50",
+      "name": "Google Gemini Chat Model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "71ZY0sl7Pn9587dw",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{   \"candidate_name\": \"John Doe\",   \"candidate_email\": \"john@example.com\",   \"profile_summary\": \"A concise summary of the candidate's profile.\",   \"strengths\": [     \"Python\",     \"React\",     \"SQL\"   ],   \"weaknesses\": [     \"Limited professional experience\"   ],   \"best_fit_roles\": [     {       \"role\": \"Junior Software Engineer\",       \"match_percentage\": 88,       \"why\": \"The candidate has relevant programming and project experience.\",       \"matching_skills\": [\"Python\", \"SQL\"],       \"missing_skills\": [\"Docker\"]     }   ],   \"linkedin_job_recommendations\": [     {       \"job_title\": \"Junior Software Engineer\",       \"company\": \"Example Company\",       \"location\": \"Hyderabad\",       \"work_mode\": \"Not available\",       \"match_percentage\": 88,       \"match_level\": \"HIGH\",       \"matching_skills\": [\"Python\", \"SQL\"],       \"missing_skills\": [\"Docker\"],       \"why_it_matches\": \"The available job information is relevant to the candidate's skills.\",       \"job_url\": \"https://www.linkedin.com/jobs/view/123456789/\"     }   ],   \"skills_to_improve\": [     \"Docker\", \"Automated testing\" ], \"final_recommendation\": \"Focus on the highest-match roles and improve the identified skill gaps.\" }"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        2480,
+        320
+      ],
+      "id": "77abca26-ad81-401f-bc81-c2ab7badbe4b",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('On form submission').item.json.Email }}",
+        "subject": "={{ 'Resume Analysis & Job Recommendations - ' + ($json.output.candidate_name || $('On form submission').item.json.Name) }} ",
+        "message": "=<!DOCTYPE html>\n<html>\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n    <title>Resume Analysis Report</title>\n</head>\n\n<body style=\"margin: 0; padding: 0; background: #f4f6f8; font-family: Arial, Helvetica, sans-serif;\">\n\n    <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"background: #f4f6f8; padding: 25px 0;\">\n        <tr>\n            <td align=\"center\">\n\n                <table width=\"680\" cellpadding=\"0\" cellspacing=\"0\"\n                    style=\"background: #ffffff; border-radius: 10px; overflow: hidden;\">\n\n                    <!-- Header -->\n                    <tr>\n                        <td style=\"background: #1f2937; padding: 25px; color: #ffffff;\">\n\n                            <h1 style=\"margin: 0; font-size: 23px;\">\n                                Resume Analysis Report\n                            </h1>\n\n                            <p style=\"margin: 8px 0 0; font-size: 14px;\">\n                                Personalized Job Recommendations\n                            </p>\n\n                        </td>\n                    </tr>\n\n                    <!-- Main Content -->\n                    <tr>\n                        <td style=\"padding: 25px; color: #333333; font-size: 14px; line-height: 1.6;\">\n\n                            <!-- Greeting -->\n                            <p>\n                                Hi\n                                <strong>\n                                    {{ $json.output.candidate_name || $('On form submission').item.json.Name }}\n                                </strong>,\n                            </p>\n\n                            <p>\n                                Your resume has been analyzed based on your skills, education,\n                                experience, projects and career profile. Available LinkedIn job\n                                listings were also compared with your profile.\n                            </p>\n\n                            <!-- Profile Summary -->\n                            <h2 style=\"font-size: 19px; color: #111827;\">\n                                Profile Summary\n                            </h2>\n\n                            <p>\n                                {{ $json.output.profile_summary }}\n                            </p>\n\n                            <!-- Strongest Skills -->\n                            <h2 style=\"font-size: 19px; color: #111827;\">\n                                Your Strongest Skills\n                            </h2>\n\n                            <ul>\n                                {{\n                                    ($json.output.strengths || [])\n                                        .map(skill => '<li>' + skill + '</li>')\n                                        .join('')\n                                }}\n                            </ul>\n\n                            <!-- Weaknesses -->\n                            <h2 style=\"font-size: 19px; color: #111827;\">\n                                Weaknesses / Skill Gaps\n                            </h2>\n\n                            <ul>\n                                {{\n                                    ($json.output.weaknesses || [])\n                                        .map(skill => '<li>' + skill + '</li>')\n                                        .join('')\n                                }}\n                            </ul>\n\n                            <!-- Best Fit Roles -->\n                            <h2 style=\"font-size: 19px; color: #111827;\">\n                                Best-Fit Job Roles\n                            </h2>\n\n                            {{\n                                ($json.output.best_fit_roles || [])\n                                    .map(role =>\n                                        '<div style=\"border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 12px 0; background: #fafafa;\">' +\n\n                                            '<div style=\"font-size: 16px; font-weight: bold;\">' +\n                                                role.role +\n                                            '</div>' +\n\n                                            '<div style=\"margin-top: 7px;\">' +\n                                                '<strong>Suitability:</strong> ' +\n                                                role.match_percentage +\n                                                '%' +\n                                            '</div>' +\n\n                                            '<div style=\"margin-top: 7px;\">' +\n                                                '<strong>Why you fit:</strong> ' +\n                                                role.why +\n                                            '</div>' +\n\n                                            '<div style=\"margin-top: 7px;\">' +\n                                                '<strong>Matching skills:</strong> ' +\n                                                (role.matching_skills || []).join(', ') +\n                                            '</div>' +\n\n                                            '<div style=\"margin-top: 7px;\">' +\n                                                '<strong>Missing skills:</strong> ' +\n                                                (role.missing_skills || []).join(', ') +\n                                            '</div>' +\n\n                                        '</div>'\n                                    )\n                                    .join('')\n                            }}\n\n                            <!-- LinkedIn Jobs -->\n                            <h2 style=\"font-size: 19px; color: #111827;\">\n                                Recommended LinkedIn Jobs\n                            </h2>\n\n                            {{\n                                ($json.output.linkedin_job_recommendations || []).length > 0\n\n                                ?\n\n                                ($json.output.linkedin_job_recommendations || [])\n                                    .map(job =>\n                                        '<div style=\"border: 1px solid #dbe3ea; border-radius: 9px; padding: 17px; margin: 14px 0;\">' +\n\n                                            '<div style=\"font-size: 17px; font-weight: bold;\">' +\n                                                job.job_title +\n                                            '</div>' +\n\n                                            '<div style=\"margin-top: 5px; font-size: 14px;\">' +\n                                                job.company +\n                                                ' · ' +\n                                                job.location +\n                                            '</div>' +\n\n                                            '<div style=\"margin-top: 9px;\">' +\n                                                '<strong>Match:</strong> ' +\n                                                job.match_percentage +\n                                                '% · <strong>' +\n                                                job.match_level +\n                                                '</strong>' +\n                                            '</div>' +\n\n                                            '<div style=\"margin-top: 7px;\">' +\n                                                '<strong>Matching Skills:</strong> ' +\n                                                (job.matching_skills || []).join(', ') +\n                                            '</div>' +\n\n                                            '<div style=\"margin-top: 7px;\">' +\n                                                '<strong>Missing Skills:</strong> ' +\n                                                (job.missing_skills || []).join(', ') +\n                                            '</div>' +\n\n                                            '<div style=\"margin-top: 7px;\">' +\n                                                '<strong>Why it matches:</strong> ' +\n                                                job.why_it_matches +\n                                            '</div>' +\n\n                                            '<div style=\"margin-top: 15px;\">' +\n\n                                                '<a href=\"' +\n                                                    job.job_url +\n                                                '\" style=\"display: inline-block; background: #0a66c2; color: #ffffff; text-decoration: none; padding: 10px 16px; border-radius: 6px; font-weight: bold;\">' +\n\n                                                    'View Job on LinkedIn' +\n\n                                                '</a>' +\n\n                                            '</div>' +\n\n                                        '</div>'\n                                    )\n                                    .join('')\n\n                                :\n\n                                '<div style=\"background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 15px;\">' +\n                                    'No strong matching LinkedIn jobs were found in the available search results.' +\n                                '</div>'\n                            }}\n\n                            <!-- Skills to Improve -->\n                            <h2 style=\"font-size: 19px; color: #111827;\">\n                                Skills You Should Improve\n                            </h2>\n\n                            <ul>\n                                {{\n                                    ($json.output.skills_to_improve || [])\n                                        .map(skill => '<li>' + skill + '</li>')\n                                        .join('')\n                                }}\n                            </ul>\n\n                            <!-- Final Recommendation -->\n                            <h2 style=\"font-size: 19px; color: #111827;\">\n                                Final Recommendation\n                            </h2>\n\n                            <div style=\"background: #f3f4f6; border-radius: 8px; padding: 15px;\">\n                                {{ $json.output.final_recommendation }}\n                            </div>\n\n                            <!-- Footer Message -->\n                            <p style=\"margin-top: 30px;\">\n                                Best regards,<br>\n                                <strong>AI Resume Analyzer</strong>\n                            </p>\n\n                        </td>\n                    </tr>\n\n                    <!-- Footer -->\n                    <tr>\n                        <td style=\"background: #f9fafb; padding: 15px; text-align: center; color: #6b7280; font-size: 11px;\">\n                            This is an automated resume analysis report.\n                        </td>\n                    </tr>\n\n                </table>\n\n            </td>\n        </tr>\n    </table>\n\n</body>\n</html>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2704,
+        -16
+      ],
+      "id": "66295066-bd5f-4f18-98d9-610949102573",
+      "name": "Send a message",
+      "webhookId": "bbca52ba-2258-460f-8834-325d83c11e0a",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "JUXEHzzOxZlijMJ2",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\n\nconst locations = input.locations || \"\";\n\nconst locationList = locations\n  .split(\",\")\n  .map(location => location.trim())\n  .filter(location => location.length > 0);\n\nreturn locationList.map(location => ({\n  json: {\n    ...input,\n    jobLocation: location\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "3cdf771c-5f5d-4a93-b29f-0903d6885a5a",
+      "name": "Prepare the locations"
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "job_title",
+              "cssSelector": ".base-search-card__title"
+            },
+            {
+              "key": "company",
+              "cssSelector": ".base-search-card__subtitle"
+            },
+            {
+              "key": "job_location",
+              "cssSelector": ".job-search-card__location"
+            },
+            {
+              "key": "job_url",
+              "cssSelector": ".base-card__full-link",
+              "returnValue": "attribute",
+              "attribute": "href"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        1424,
+        0
+      ],
+      "id": "482950af-6d0f-4635-82d8-ec80abf76505",
+      "name": "HTML"
+    },
+    {
+      "parameters": {
+        "jsCode": "const location = ($json.location || '').toLowerCase().trim();\n\nlet requestedCity = '';\n\nif (location.includes(',')) {\n  requestedCity = location.split(',')[0].trim();\n} else {\n  requestedCity = location;\n}\n\nreturn {\n  json: {\n    ...$json,\n    requested_location_clean: location,\n    requested_city: requestedCity\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1632,
+        0
+      ],
+      "id": "add5fd3c-d435-43ed-a72b-37a5c8b86080",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ecf815c2-8a4d-4589-83ba-125e31d79a1b",
+              "leftValue": "={{ $json.requested_location_clean }}",
+              "rightValue": "={{ $json.requested_city }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1824,
+        0
+      ],
+      "id": "cd800765-edaa-445d-bb60-e24f041486df",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('On form submission').item.json.Email }}",
+        "subject": "No LinkedIn Jobs Found",
+        "message": "Hello,  We could not find any LinkedIn jobs matching the requested location at this time.  We will continue looking for relevant opportunities.  Best regards, Job Search Assistant",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2032,
+        192
+      ],
+      "id": "3a1ed11a-f333-486c-a666-a64878133d8e",
+      "name": "Send a message1",
+      "webhookId": "40478c10-8523-414e-acbe-5e5676f2f3b5",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "JUXEHzzOxZlijMJ2",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Prepare the locations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resume Analysis Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "LinkedIn Jobs Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LinkedIn Jobs Search": {
+      "main": [
+        [
+          {
+            "node": "HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Final Resume & Job Matcher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Final Resume & Job Matcher",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Final Resume & Job Matcher",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Resume & Job Matcher": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare the locations": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTML": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "15669ea0-154c-4185-bd63-8239dc0c6501",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "799168810e4aa1d9b43ddd186e2d5eecac268b099e2818a77cacb520ac260f1a"
+  },
+  "nodeGroups": [],
+  "id": "8nor9DZlUStVEvps",
+  "tags": []
+}
